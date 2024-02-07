@@ -122,6 +122,10 @@
 
     <Compile Include="Renderer.fs" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Expecto" Version="10.1.0" />
+    <PackageReference Include="Expecto.FsCheck" Version="10.1.0" />
+  </ItemGroup>
   
   <!-- Dependencies -->
   <Import Project="..\..\.paket\Paket.Restore.targets" />

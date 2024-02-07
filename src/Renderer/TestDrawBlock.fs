@@ -232,16 +232,38 @@ module HLPTick3 =
                         Description = None
                     }
                 placeSymbol symLabel (Custom ccType) position model
-            
-        
 
         // Rotate a symbol
         let rotateSymbol (symLabel: string) (rotate: Rotation) (model: SheetT.Model) : (SheetT.Model) =
-            failwithf "Not Implemented"
+
+            let compIDtoSymbol = model.Wire.Symbol.Symbols
+            let getSymbol = 
+                mapValues compIDtoSymbol
+                |> Array.tryFind (fun s -> caseInvariantEqual s.Component.Label symLabel)
+                |> function | Some x -> Ok x | None -> Error "Can't find symbol with label '{symLabel}'"
+
+            match getSymbol with
+            | Ok x ->
+                let rotatedSymbol = SymbolResizeHelpers.rotateSymbol rotate x
+                let updatedCompIDtoSymbol = Map.add x.Id rotatedSymbol compIDtoSymbol
+                { model with Wire = { model.Wire with Symbol = { model.Wire.Symbol with Symbols = updatedCompIDtoSymbol } } }
+            | _ -> model
 
         // Flip a symbol
         let flipSymbol (symLabel: string) (flip: SymbolT.FlipType) (model: SheetT.Model) : (SheetT.Model) =
-            failwithf "Not Implemented"
+
+            let compIDtoSymbol = model.Wire.Symbol.Symbols
+            let getSymbol =
+                mapValues compIDtoSymbol
+                |> Array.tryFind (fun s -> caseInvariantEqual s.Component.Label symLabel)
+                |> function | Some x -> Ok x | None -> Error "Can't find symbol with label '{symLabel}'"
+
+            match getSymbol with
+            | Ok x ->
+                let flippedSymbol = SymbolResizeHelpers.flipSymbol flip x
+                let updatedCompIDtoSymbol = Map.add x.Id flippedSymbol compIDtoSymbol
+                { model with Wire = { model.Wire with Symbol = { model.Wire.Symbol with Symbols = updatedCompIDtoSymbol } } }
+            | _ -> model
 
         /// Add a (newly routed) wire, source specifies the Output port, target the Input port.
         /// Return an error if either of the two ports specified is invalid, or if the wire duplicates and existing one.
@@ -329,6 +351,22 @@ module HLPTick3 =
         fromList [-100..20..100]
         |> map (fun n -> middleOfSheet + {X=float n; Y=0.})
 
+    let verticalLinePositions =
+        fromList [-50..10..50]
+        |> map (fun n -> middleOfSheet + {X=0.; Y=float n})
+
+    let productPositions = GenerateData.product (fun x y -> x - y + middleOfSheet) horizLinePositions verticalLinePositions
+
+    let block1Properties = Symbol.getComponentProperties DFF "FF1"
+    let block2Properties = Symbol.getComponentProperties (GateN(And,2)) "G1"
+
+    let block1BoundingBox = {TopLeft={X=middleOfSheet.X - block1Properties.Item4/2.0 ; Y=middleOfSheet.Y + block1Properties.Item3/2.0} ; W=block1Properties.Item4 ; H=block1Properties.Item3 }
+    let block2BoundingBox XY = {TopLeft=XY ; W=block2Properties.Item4 ; H=block2Properties.Item3 }
+
+    let checkOverlap XY = BlockHelpers.overlap2DBox block1BoundingBox (block2BoundingBox XY) 
+
+    let filteredPositions = GenerateData.filter checkOverlap productPositions
+
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
         initSheetModel
@@ -338,6 +376,44 @@ module HLPTick3 =
         |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
         |> getOkOrFail
 
+    let makeTest2Circuit (andPos:XYPos) =
+        let newModel = rotateSymbol "G1" Degree270
+        let tryRotate currentSheet = if true then Ok (newModel currentSheet) else Error "ERROR"
+        initSheetModel
+        |> placeSymbol "G1" (GateN(And,2)) andPos
+        |> Result.bind (tryRotate)
+        |> Result.bind (placeSymbol "FF1" DFF middleOfSheet)
+        |> Result.bind (placeWire (portOf "G1" 0) (portOf "FF1" 0))
+        |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> getOkOrFail
+
+
+    let makeTest3Circuit (andPos:XYPos) =
+        let newModel = flipSymbol "G1" SymbolT.FlipHorizontal
+        let tryFlip currentSheet = if true then Ok (newModel currentSheet) else Error "ERROR"
+        initSheetModel
+        |> placeSymbol "G1" (GateN(And,2)) andPos
+        |> Result.bind (tryFlip)
+        |> Result.bind (placeSymbol "FF1" DFF middleOfSheet)
+        |> Result.bind (placeWire (portOf "G1" 0) (portOf "FF1" 0))
+        |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> getOkOrFail
+
+
+    let makeTest4Circuit (rotate: Rotation) (flip: SymbolT.FlipType) (andPos:XYPos)=
+        let newModel1 = rotateSymbol "G1" rotate
+        let tryRotate currentSheet = if true then Ok (newModel1 currentSheet) else Error "ERROR"
+        let newModel2 = flipSymbol "G1" flip 
+        let tryFlip currentSheet = if true then Ok (newModel2 currentSheet) else Error "ERROR"
+        initSheetModel
+        |> placeSymbol "G1" (GateN(And,2)) andPos
+        |> Result.bind (tryFlip)
+        |> Result.bind (tryRotate)
+        |> Result.bind (placeSymbol "FF1" DFF middleOfSheet)
+        |> Result.bind (placeWire (portOf "G1" 0) (portOf "FF1" 0))
+        |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+        |> getOkOrFail
+   
 
 
 //------------------------------------------------------------------------------------------------//
@@ -381,6 +457,7 @@ module HLPTick3 =
             |> List.exists (fun ((n1,box1),(n2,box2)) -> (n1 <> n2) && BlockHelpers.overlap2DBox box1 box2)
             |> (function | true -> Some $"Symbol outline intersects another symbol outline in Sample {sample}"
                          | false -> None)
+
 
 
 
@@ -446,6 +523,55 @@ module HLPTick3 =
                 dispatch
             |> recordPositionInTest testNum dispatch
 
+        let test5 testNum firstSample dispatch =
+            runTestOnSheets
+                "Horizontally positioned AND + DFF: fail on wire intersect"
+                firstSample
+                filteredPositions
+                makeTest1Circuit
+                Asserts.failOnWireIntersectsSymbol
+                dispatch
+            |> recordPositionInTest testNum dispatch
+
+        let test6 testNum firstSample dispatch =
+            runTestOnSheets
+                "Horizontally positioned AND + DFF: fail on rotate"
+                firstSample
+                filteredPositions
+                makeTest2Circuit
+                Asserts.failOnSymbolIntersectsSymbol
+                dispatch
+            |> recordPositionInTest testNum dispatch
+
+        let test7 testNum firstSample dispatch =
+            runTestOnSheets
+                "Horizontally positioned AND + DFF: fail on flip"
+                firstSample
+                filteredPositions
+                makeTest3Circuit
+                Asserts.failOnSymbolIntersectsSymbol
+                dispatch
+            |> recordPositionInTest testNum dispatch
+
+        let rotations = [|Degree0; Degree90; Degree180; Degree270|]
+        let flips = [|SymbolT.FlipHorizontal; SymbolT.FlipVertical|]
+
+        let getRandom<'A> (array: 'A[]) : 'A = 
+            let index = GenerateData.random.Next(array.Length)
+            array.[index]
+
+        let test8 testNum firstSample dispatch =
+            let rotateValue = getRandom rotations
+            let flipValue = getRandom flips
+            runTestOnSheets
+                "Horizontally positioned AND + DFF: fail on random flip and rotate"
+                firstSample
+                filteredPositions
+                (makeTest4Circuit rotateValue flipValue)
+                Asserts.failOnSymbolIntersectsSymbol
+                dispatch
+            |> recordPositionInTest testNum dispatch
+
         /// List of tests available which can be run ftom Issie File Menu.
         /// The first 9 tests can also be run via Ctrl-n accelerator keys as shown on menu
         let testsToRunFromSheetMenu : (string * (int -> int -> Dispatch<Msg> -> Unit)) list =
@@ -455,11 +581,11 @@ module HLPTick3 =
                 "Test1", test1 // example
                 "Test2", test2 // example
                 "Test3", test3 // example
-                "Test4", test4 
-                "Test5", fun _ _ _ -> printf "Test5" // dummy test - delete line or replace by real test as needed
-                "Test6", fun _ _ _ -> printf "Test6"
-                "Test7", fun _ _ _ -> printf "Test7"
-                "Test8", fun _ _ _ -> printf "Test8"
+                "Test4", test4 // example
+                "Test5", test5 // dummy test - delete line or replace by real test as needed
+                "Test6", test6 // Rotation Test
+                "Test7", test7 // Flip Test
+                "Test8", test8 // Random Flip and Rotation Test
                 "Next Test Error", fun _ _ _ -> printf "Next Error:" // Go to the nexterror in a test
 
             ]
@@ -488,6 +614,7 @@ module HLPTick3 =
         
 
 
-    
+
+
 
 
