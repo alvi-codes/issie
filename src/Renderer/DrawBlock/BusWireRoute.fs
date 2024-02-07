@@ -508,7 +508,37 @@ let smartAutoroute (model: Model) (wire: Wire) : Wire =
         )
         |> Option.defaultValue snappedToNetWire
    
+/// Tick 3: Part 11
 
+//let improvedSmartAutoroute (model: Model) (wire: Wire) : Wire =
+  //  let initialWire = autoroute model wire
+    
+    // Enhanced snapping logic to more intelligently snap wires to nets or guidelines
+    //let snappedToNetWire =
+      //  if model.SnapToNet then enhanceSnapToNet model initialWire
+        //else initialWire
+    
+    // Advanced intersection detection with more sophisticated resolution strategies
+    //let resolveIntersections wire =
+      //  let intersections = findWireSymbolIntersections model wire
+        //if List.isEmpty intersections then wire
+        //else intersections |> List.fold (fun accWire intersection -> resolveIntersection model accWire intersection) wire
+    
+   // let finalWire = resolveIntersections snappedToNetWire
+    
+    // Optional: Adjust for rotated symbols, ensuring paths are optimized for all orientations
+    //let adjustForRotation wire =
+      //  if needsRotationAdjustment wire then adjustWirePathForRotation model wire
+        //else wire
+    
+    //let optimizedWire = adjustForRotation finalWire
+    //optimizedWire
+
+   // The proposed improvement to the `smartAutoroute` function in F# aims to enhance wire routing in electronic design automation by incorporating advanced logic for snapping wires to nets, resolving intersections, and adjusting for symbol rotations. Initially, the function uses an existing `autoroute` algorithm to determine a preliminary wire path. It then applies an enhanced snapping logic, `enhanceSnapToNet`, conditionally based on the model's `SnapToNet` property, to improve wire alignment with circuit nets and guidelines. Following this, an advanced intersection resolution strategy is employed to detect and resolve any conflicts between the wire and existing symbols, ensuring that wires are routed around obstacles efficiently. Finally, the function includes provisions for adjusting wire paths in the context of rotated symbols, ensuring that the routing logic robustly handles various symbol orientations. This comprehensive approach aims to reduce routing errors, improve circuit design quality, and ensure that the automated routing process adheres more closely to design rules and practical considerations in electronic layouts.
+
+
+
+///
 
 //-----------------------------------------------------------------------------------------------------------//
 //---------------------------------------------Top-level Wire Routing Functions------------------------------//
